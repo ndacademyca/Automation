@@ -91,15 +91,14 @@ def process_reminders():
             continue
 
         body = f"""
-        <p>Dear {row['Customer']},</p>
-        <p>{row['Message']}</p>
-        <p><b>Class Date:</b> {row['Reminder_Date']}<br>
-        <b>Course:</b> {row['Course']}<br>
-        <b>Class Time:</b> {row['Session']}</p>
-        <p><img src="https://raw.githubusercontent.com/ndacademyca/images/main/Whatsapp_notification.png"
-                width="650"></p>
-        <p><b>Zoom link:</b> {row['Zoom_link']}</p>
-        <p>Warm regards,<br>New Dimension Academy</p>
+        <p>Dear {name},</p>
+        <p>{message}</p>
+        <p><b>Class Date: </b>{row['Reminder_Date']}
+        <br><b>Course: </b>{row['Course']}
+        <br><b>Class Time: </b>{row['Session']}<br></p>
+        <p><img src="https://raw.githubusercontent.com/ndacademyca/images/main/Whatsapp_notification.png"alt="You Have a Class Today" width="650" style="display:block; margin-top:10px;">
+        <br><b>Zoom link: </b>{row['Zoom_link']}<br>
+        <p>Warm regards,<br><br><img src="https://raw.githubusercontent.com/ndacademyca/images/main/NewDimensionAcademy_t.png"alt="New Dimension Academy" width="200" style="display:block; margin-top:10px;"><br>Phone: +1 437 967 5082<br>Website: <a href="https://www.ndacademy.ca">www.ndacademy.ca</a><br>Email: <a href="mailto:info@ndacademy.ca">info@ndacademy.ca</a><br><br>| At new dimension academy, we are Expanding Minds, Unlocking New Dimensions.|</p>
         """
 
         send_email(row["Email"], f"Reminder for {row['Customer']}", body)
@@ -111,3 +110,4 @@ def process_reminders():
 # ---------------- MAIN ENTRY POINT -----------------
 if __name__ == "__main__":
     process_reminders()
+
