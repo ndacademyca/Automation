@@ -2,7 +2,7 @@ name: Send Daily Reminders
 
 on:
   schedule:
-    - cron: "26 19 * * *"  # every day at 011:00 UTC or 11 ET in winter and 12 ET in summer 
+    - cron: "0 16 * * *"  # every day at 011:00 UTC or 11 ET in winter and 12 ET in summer 
   workflow_dispatch:      # manual trigger
 
 jobs:
