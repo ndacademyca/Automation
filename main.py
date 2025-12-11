@@ -62,7 +62,8 @@ def read_google_sheet():
 def send_email(recipient, subject, body):
     try:
         msg = MIMEMultipart()
-        msg["From"] = EMAIL_USER
+        # msg["From"] = EMAIL_USER
+        msg['From'] = f"New Dimension Academy <{EMAIL_USER}>"
         msg["To"] = recipient
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
@@ -118,5 +119,6 @@ def process_reminders():
 # ---------------- MAIN ENTRY POINT -----------------
 if __name__ == "__main__":
     process_reminders()
+
 
 
