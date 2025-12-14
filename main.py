@@ -140,8 +140,16 @@ def process_reminders():
         </p>
         """
 
-        send_email(row["Email"], f"Reminder for {row['Customer']}", body)
-        sent_count += 1
+        # send_email(row["Email"], f"Reminder for {row['Customer']}", body)
+        # sent_count += 1
+
+    teacher_email = row.get("Teacher_Email", "")
+
+        send_email(
+            to_email=row["Email"],
+            teacher_email=teacher_email,
+            subject=f"Reminder for {row['Customer']}",
+            body=body
 
     log_message(f"🎉 All reminders processed. Total emails sent: {sent_count}")
     return f"Done — {sent_count} reminder(s) sent."
@@ -149,6 +157,7 @@ def process_reminders():
 # ---------------- MAIN ENTRY POINT -----------------
 if __name__ == "__main__":
     process_reminders()
+
 
 
 
