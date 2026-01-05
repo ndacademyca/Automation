@@ -129,7 +129,10 @@ def process_reminders():
         <b>Class Time:</b> {row['Session']}</p>
         <p><img src="https://raw.githubusercontent.com/ndacademyca/images/main/Whatsapp_notification.png"
                 width="650"></p>
-        <p><b>Zoom link:</b> {row['Zoom_link']}</p>
+        <p><b>Zoom link:</b> {row['Zoom_link']}<br>
+        <b>Zoom Meeting ID:</b> {row['Meeting_id']}<br>
+        <b>Zoom Meeting Passcode:</b> {row['Passcode']}
+        </p>
         <p>Warm regards,<br><br>
         <img src="https://raw.githubusercontent.com/ndacademyca/images/main/NewDimensionAcademy_t.png"
              alt="New Dimension Academy" width="200" style="display:block; margin-top:10px;"><br>
@@ -157,6 +160,7 @@ def process_reminders():
 # ---------------- MAIN ENTRY POINT -----------------
 if __name__ == "__main__":
     process_reminders()
+
 
 
 
