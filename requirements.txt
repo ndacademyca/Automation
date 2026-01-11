@@ -5,4 +5,7 @@ google-auth-httplib2
 pandas
 functions-framework
 requests
+pandas
+gspread
+
 
