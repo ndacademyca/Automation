@@ -1,192 +1,170 @@
-# -*- coding: utf-8 -*-
-
 import os
-import json
-import base64
+import pandas as pd
 import smtplib
-import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import pandas as pd
-from googleapiclient.discovery import build
+from datetime import datetime, timezone
+import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
 
-# ---------------- GOOGLE SHEET CONFIG -----------------
-SPREADSHEET_ID = "1kfrSDM1c8Z9MBtI85IjDjJABL2KXuN1k8yPyAfWKh0U"
-RANGE_NAME = "Current_Report"
 
-# ---------------- EMAIL CONFIG -----------------
+# =============================
+# CONFIGURATION
+# =============================
+SPREADSHEET_NAME = "Progress_Report"
+WORKSHEET_NAME = "Sheet1"
+
 SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465
-EMAIL_USER = os.environ.get("EMAIL_USER")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+SMTP_PORT = 587
 
-# ---------------- IMAGE CONFIG -----------------
-HEADER_IMAGE_URL = os.environ.get("HEADER_IMAGE_URL", "")
-FOOTER_IMAGE_URL = os.environ.get("FOOTER_IMAGE_URL", "")
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-# ---------------- SERVICE ACCOUNT -----------------
-if "SERVICE_ACCOUNT_JSON" not in os.environ:
-    raise ValueError("SERVICE_ACCOUNT_JSON environment variable is missing")
 
-SERVICE_ACCOUNT_INFO = json.loads(
-    base64.b64decode(os.environ["SERVICE_ACCOUNT_JSON"]).decode("utf-8")
-)
-
-# ---------------- LOG FUNCTION -----------------
-def log_message(message: str):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] {message}")
-
-# ---------------- READ GOOGLE SHEET -----------------
+# =============================
+# GOOGLE SHEETS
+# =============================
 def read_google_sheet():
-    log_message("📌 read_google_sheet() called")
-    try:
-        creds = Credentials.from_service_account_info(
-            SERVICE_ACCOUNT_INFO,
-            scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        )
+    print("[📌] read_google_sheet() called")
 
-        service = build("sheets", "v4", credentials=creds)
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=RANGE_NAME
-        ).execute()
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    creds = Credentials.from_service_account_info(
+        eval(os.getenv("SERVICE_ACCOUNT_JSON")),
+        scopes=scopes
+    )
 
-        values = result.get("values", [])
-        if not values:
-            log_message("❌ No data found in Google Sheet")
-            return None
+    client = gspread.authorize(creds)
+    sheet = client.open(SPREADSHEET_NAME).worksheet(WORKSHEET_NAME)
 
-        df = pd.DataFrame(values[1:], columns=values[0])
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
 
-        # 🔐 HARDENING
-        df.columns = df.columns.str.strip()   # remove trailing spaces
-        df = df.fillna("")                    # avoid NaN issues
+    # 🔹 Drop empty columns
+    df = df.loc[:, df.columns != ""]
 
-        log_message(f"✅ Google Sheet read successfully. Rows: {len(df)}")
-        log_message(f"📄 Columns detected: {list(df.columns)}")
+    print(f"[✅] Google Sheet read successfully. Rows: {len(df)}")
+    print(f"[📄] Columns detected: {list(df.columns)}")
 
-        return df
+    return df
 
-    except Exception as e:
-        log_message(f"❌ Failed to read Google Sheet: {e}")
-        return None
 
-# ---------------- SEND EMAIL -----------------
-def send_email(to_email, teacher_email, subject, body):
-    try:
-        msg = MIMEMultipart()
-        msg["From"] = f"New Dimension Academy <{EMAIL_USER}>"
-        msg["To"] = to_email
-        msg["Subject"] = subject
+# =============================
+# EMAIL TEMPLATE
+# =============================
+def build_email(row):
+    return f"""
+    <html>
+    <body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif">
+        <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td align="center">
+                    <table width="600" style="background:#ffffff;border-collapse:collapse">
 
-        bcc_list = ["alhuraibia@gmail.com", "dalmaznaee@gmail.com"]
-        if teacher_email.strip():
-            bcc_list.append(teacher_email)
+                        <!-- Header Image -->
+                        <tr>
+                            <td>
+                                <img src="https://example.com/header.png" width="600" style="display:block">
+                            </td>
+                        </tr>
 
-        msg["Bcc"] = ", ".join(bcc_list)
-        msg.attach(MIMEText(body, "html"))
+                        <!-- Student Info -->
+                        <tr>
+                            <td style="padding:20px">
+                                <h2>Progress Report</h2>
+                                <p><strong>Student:</strong> {row.get('Student_Name','')}</p>
+                                <p><strong>Course:</strong> {row.get('Course','')}</p>
+                                <p><strong>Level:</strong> {row.get('Level','')}</p>
+                                <p><strong>Teacher:</strong> {row.get('Teacher','')}</p>
+                            </td>
+                        </tr>
 
-        recipients = [to_email] + bcc_list
+                        <!-- Cognitive Goals -->
+                        <tr>
+                            <td style="padding:20px">
+                                <strong>Cognitive Goals</strong><br>
+                                {row.get('Cognitive_Goals','')}
+                            </td>
+                        </tr>
 
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_USER, recipients, msg.as_string())
+                        <!-- Teacher Comments -->
+                        <tr>
+                            <td style="padding:20px">
+                                <strong>Teacher Comments</strong><br>
+                                {row.get("Teacher's_Comments",'')}
+                            </td>
+                        </tr>
 
-        log_message(f"✅ Email sent → TO: {to_email} | BCC: {', '.join(bcc_list)}")
+                        <!-- General Comment -->
+                        <tr>
+                            <td style="padding:20px">
+                                <strong>General Comment</strong><br>
+                                {row.get('General_Comment','')}
+                            </td>
+                        </tr>
 
-    except Exception as e:
-        log_message(f"❌ Failed to send email to {to_email}: {e}")
+                        <!-- Footer Image -->
+                        <tr>
+                            <td>
+                                <img src="https://example.com/footer.png" width="600" style="display:block">
+                            </td>
+                        </tr>
 
-# ---------------- PROCESS REPORTS -----------------
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+
+
+# =============================
+# SEND EMAIL
+# =============================
+def send_email(to_email, subject, html_body):
+    msg = MIMEMultipart("alternative")
+    msg["From"] = EMAIL_USER
+    msg["To"] = to_email
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText(html_body, "html"))
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.send_message(msg)
+
+
+# =============================
+# MAIN PROCESS
+# =============================
 def process_reminders():
     df = read_google_sheet()
-    if df is None or df.empty:
-        return "No data to process"
 
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
-    log_message(f"Processing reminders for {today_str}")
-
-    sent_count = 0
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    print(f"[📅] Processing reminders for {today_str}")
 
     for _, row in df.iterrows():
-        report_date = str(row.get("Report_Date", "")).split(" ")[0]
+        report_date = str(row.get("Report_Date", ""))[:10]
+
         if report_date != today_str:
             continue
 
-        body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Student Progress Report</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial">
+        print(f"[📨] Sending report to {row.get('Student_Email')}")
 
-<table width="100%" cellpadding="0" cellspacing="0">
-<tr><td align="center" style="padding:20px">
-
-<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden">
-
-<tr><td><img src="{HEADER_IMAGE_URL}" width="600" style="display:block;width:100%"></td></tr>
-
-<tr>
-<td style="padding:20px;text-align:center">
-<h2>Student Progress Report</h2>
-<p>{row['Course_Month']} {row['Course_Year']}</p>
-</td>
-</tr>
-
-<tr><td style="padding:20px">
-<table width="100%" cellpadding="8">
-<tr><td><strong>Student Name</strong></td><td>{row['Student_Name']}</td></tr>
-<tr><td><strong>Course</strong></td><td>{row['Course']}</td></tr>
-<tr><td><strong>Level</strong></td><td>{row['Level']}</td></tr>
-<tr><td><strong>Teacher</strong></td><td>{row['Teacher']}</td></tr>
-</table>
-</td></tr>
-
-<tr><td style="padding:20px"><strong>Cognitive Goals</strong><br>{row['Cognitive_Goals']}</td></tr>
-<tr><td style="padding:20px"><strong>Teacher Comments</strong><br>{row['Teacher_Comments']}</td></tr>
-<tr><td style="padding:20px"><strong>General Comment</strong><br>{row['General_Comment']}</td></tr>
-
-<tr>
-<td style="padding:20px;text-align:center;font-size:13px">
-Report Date: {row['Report_Date']}<br>
-Contact: {row['Teacher']} – {row['Teacher_Email']}
-</td>
-</tr>
-
-<tr><td><img src="{FOOTER_IMAGE_URL}" width="600" style="display:block;width:100%"></td></tr>
-
-</table>
-</td></tr>
-</table>
-
-</body>
-</html>
-"""
-
-        subject = (
-            f"{row['Course_Month']} {row['Course_Year']} "
-            f"{row['Course']} Progress Report for {row['Student_Name']}"
-        )
+        email_body = build_email(row)
 
         send_email(
-            to_email=row["Student_Email"],
-            teacher_email=row.get("Teacher_Email", ""),
-            subject=subject,
-            body=body
+            to_email=row.get("Student_Email"),
+            subject="Student Progress Report",
+            html_body=email_body
         )
 
-        sent_count += 1
+        print("[✅] Email sent successfully")
 
-    log_message(f"🎉 Completed. Emails sent: {sent_count}")
-    return f"Done — {sent_count} report(s) sent"
 
-# ---------------- MAIN -----------------
+# =============================
+# ENTRY POINT
+# =============================
 if __name__ == "__main__":
     process_reminders()
