@@ -2,6 +2,7 @@
 
 import os
 import json
+import base64
 import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
@@ -15,16 +16,21 @@ SPREADSHEET_ID = "1kfrSDM1c8Z9MBtI85IjDjJABL2KXuN1k8yPyAfWKh0U"
 RANGE_NAME = "Current_Report"
 
 SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465  # or 587
+SMTP_PORT = 465
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # App password
 
 HEADER_IMAGE_URL = os.getenv("HEADER_IMAGE_URL", "")
 FOOTER_IMAGE_URL = os.getenv("FOOTER_IMAGE_URL", "")
 
-SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
-if not SERVICE_ACCOUNT_JSON:
-    raise ValueError("SERVICE_ACCOUNT_JSON secret is missing!")
+# ---------------- SERVICE ACCOUNT -----------------
+if "SERVICE_ACCOUNT_JSON" not in os.environ:
+    raise ValueError("SERVICE_ACCOUNT_JSON environment variable is not set!")
+
+# Decode base64 JSON (works with GitHub Actions secret)
+SERVICE_ACCOUNT_INFO = json.loads(
+    base64.b64decode(os.environ["SERVICE_ACCOUNT_JSON"]).decode("utf-8")
+)
 
 # ---------------- LOG FUNCTION -----------------
 def log_message(message: str):
@@ -34,11 +40,9 @@ def log_message(message: str):
 # ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
     log_message("📌 read_google_sheet() called")
-
     try:
-        creds_dict = json.loads(SERVICE_ACCOUNT_JSON)
         creds = Credentials.from_service_account_info(
-            creds_dict,
+            SERVICE_ACCOUNT_INFO,
             scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
         )
         service = build("sheets", "v4", credentials=creds)
@@ -48,19 +52,14 @@ def read_google_sheet():
         ).execute()
         values = result.get("values", [])
         if not values:
-            log_message("❌ No data found in Google Sheet")
+            log_message("❌ No data found in Google Sheet.")
             return None
 
-        df = pd.DataFrame(values[1:], columns=values[0])
-
-        # Clean column names
-        df.columns = df.columns.str.strip()
+        df = pd.DataFrame(values[1:], columns=[c.strip() for c in values[0]])
         df = df.loc[:, df.columns != ""]  # remove empty columns
         df = df.fillna("")  # replace NaN with empty string
-
         log_message(f"✅ Google Sheet read successfully. Rows: {len(df)}")
         log_message(f"[📄] Columns detected: {list(df.columns)}")
-
         return df
 
     except Exception as e:
@@ -149,6 +148,7 @@ def send_email(to_email, teacher_email, subject, body):
         msg["From"] = f"New Dimension Academy <{EMAIL_USER}>"
         msg["To"] = to_email
         msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
 
         bcc_list = ["alhuraibia@gmail.com", "dalmaznaee@gmail.com"]
         if teacher_email.strip():
@@ -156,7 +156,6 @@ def send_email(to_email, teacher_email, subject, body):
 
         recipients = [to_email] + bcc_list
         msg["Bcc"] = ", ".join(bcc_list)
-        msg.attach(MIMEText(body, "html"))
 
         context = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
         context.login(EMAIL_USER, EMAIL_PASSWORD)
@@ -164,7 +163,6 @@ def send_email(to_email, teacher_email, subject, body):
         context.quit()
 
         log_message(f"✅ Email sent → TO: {to_email} | BCC: {', '.join(bcc_list)}")
-
     except Exception as e:
         log_message(f"❌ Failed to send email to {to_email}: {e}")
 
@@ -176,7 +174,7 @@ def process_reminders():
         return
 
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    log_message(f"📅 Processing reminders for {today_str}")
+    log_message(f"📅 Processing reports for {today_str}")
 
     sent_count = 0
     for _, row in df.iterrows():
@@ -197,7 +195,6 @@ def process_reminders():
         sent_count += 1
 
     log_message(f"🎉 Completed. Emails sent: {sent_count}")
-
 
 # ---------------- MAIN -----------------
 if __name__ == "__main__":
