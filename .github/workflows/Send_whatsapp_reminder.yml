@@ -34,4 +34,4 @@ jobs:
           # Google Service Account (Base64 encoded JSON)
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
         run: |
-          python whatsapp-reminder.py
+          python whatsapp_reminder.py
