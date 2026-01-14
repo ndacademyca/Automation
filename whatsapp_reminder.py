@@ -2,34 +2,37 @@
 import os
 import json
 import base64
+import requests
 import pandas as pd
-from datetime import datetime
-from twilio.rest import Client
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
+from datetime import datetime
 
-# ---------------- CONFIG -----------------
+# ---------------- GOOGLE SHEET CONFIG -----------------
 SPREADSHEET_ID = "1-gAUMbVOio3mTzfDstqjpnQdibP2oYjuF-vhX5UovCw"
 RANGE_NAME = "Time_Table_2"
 
-# Twilio
-TWILIO_ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
-TWILIO_AUTH_TOKEN = os.environ["TWILIO_AUTH_TOKEN"]
-TWILIO_WHATSAPP_FROM = os.environ["TWILIO_WHATSAPP_FROM"]
+# ---------------- META WHATSAPP CONFIG -----------------
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-# Service Account
+WHATSAPP_API_URL = (
+    f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+)
+
+# ---------------- SERVICE ACCOUNT -----------------
 SERVICE_ACCOUNT_INFO = json.loads(
     base64.b64decode(os.environ["SERVICE_ACCOUNT_JSON"]).decode("utf-8")
 )
 
-client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+# ---------------- LOG FUNCTION -----------------
+def log_message(message):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}")
 
-# ---------------- LOG -----------------
-def log(msg):
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}")
-
-# ---------------- READ SHEET -----------------
+# ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
+    log_message("📌 read_google_sheet() called")
     creds = Credentials.from_service_account_info(
         SERVICE_ACCOUNT_INFO,
         scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -43,60 +46,88 @@ def read_google_sheet():
 
     values = result.get("values", [])
     if not values:
+        log_message("❌ No data found.")
         return None
 
-    return pd.DataFrame(values[1:], columns=values[0])
+    df = pd.DataFrame(values[1:], columns=values[0])
+    log_message(f"✅ Sheet loaded. Rows: {len(df)}")
+    return df
 
-# ---------------- SEND WHATSAPP -----------------
-def send_whatsapp(to_number, message):
-    client.messages.create(
-        from_=TWILIO_WHATSAPP_FROM,
-        to=f"whatsapp:{to_number}",
-        body=message
+# ---------------- SEND WHATSAPP (META API) -----------------
+def send_whatsapp(to_phone, message_text):
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_phone,
+        "type": "text",
+        "text": {
+            "body": message_text
+        }
+    }
+
+    response = requests.post(
+        WHATSAPP_API_URL,
+        headers=headers,
+        json=payload
     )
 
+    if response.status_code == 200:
+        log_message(f"✅ WhatsApp sent to {to_phone}")
+    else:
+        log_message(
+            f"❌ WhatsApp failed to {to_phone}: {response.text}"
+        )
+
 # ---------------- PROCESS REMINDERS -----------------
-def process_whatsapp_reminders():
+def process_reminders():
     df = read_google_sheet()
     if df is None:
-        log("No data found.")
         return
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    sent = 0
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    log_message(f"Processing reminders for {today_str}")
+    sent_count = 0
 
     for _, row in df.iterrows():
-        if row["Reminder_Date"] != today:
+        if row["Reminder_Date"] != today_str:
             continue
 
-        whatsapp_message = f"""
-📢 *Class Reminder – New Dimension Academy*
+        message = f"""
+📢 *Class Reminder*
 
 Dear {row['Customer']},
 
 {row['Message']}
 
-📅 *Date:* {row['Reminder_Date']}
-📘 *Course:* {row['Course']}
-⏰ *Time:* {row['Session']}
+📅 Date: {row['Reminder_Date']}
+📘 Course: {row['Course']}
+⏰ Time: {row['Session']}
 
-🔗 *Zoom Link:*
+🔗 Zoom Link:
 {row['Zoom_link']}
+
+🆔 Meeting ID: {row['Meeting_id']}
+🔑 Passcode: {row['Passcode']}
 
 Warm regards,
 *New Dimension Academy*
 📞 +1 437 967 5082
 🌐 www.ndacademy.ca
-
-_Expanding Minds, Unlocking New Dimensions_
 """
 
-        send_whatsapp(row["Phone"], whatsapp_message)
-        sent += 1
-        log(f"WhatsApp sent to {row['Phone']}")
+        send_whatsapp(
+            to_phone=row["Phone"],  # Must be E.164 format
+            message_text=message.strip()
+        )
 
-    log(f"✅ Done — {sent} WhatsApp reminder(s) sent.")
+        sent_count += 1
+
+    log_message(f"🎉 Done. WhatsApp messages sent: {sent_count}")
 
 # ---------------- MAIN -----------------
 if __name__ == "__main__":
-    process_whatsapp_reminders()
+    process_reminders()
