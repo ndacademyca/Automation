@@ -21,6 +21,9 @@ WHATSAPP_API_URL = (
 )
 
 # ---------------- SERVICE ACCOUNT -----------------
+if "SERVICE_ACCOUNT_JSON" not in os.environ:
+    raise ValueError("SERVICE_ACCOUNT_JSON is missing")
+
 SERVICE_ACCOUNT_INFO = json.loads(
     base64.b64decode(os.environ["SERVICE_ACCOUNT_JSON"]).decode("utf-8")
 )
@@ -33,12 +36,13 @@ def log_message(message):
 # ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
     log_message("📌 read_google_sheet() called")
+
     creds = Credentials.from_service_account_info(
         SERVICE_ACCOUNT_INFO,
         scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
     )
-    service = build("sheets", "v4", credentials=creds)
 
+    service = build("sheets", "v4", credentials=creds)
     result = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
         range=RANGE_NAME
@@ -46,15 +50,22 @@ def read_google_sheet():
 
     values = result.get("values", [])
     if not values:
-        log_message("❌ No data found.")
+        log_message("❌ No data found in Google Sheet.")
         return None
 
     df = pd.DataFrame(values[1:], columns=values[0])
     log_message(f"✅ Sheet loaded. Rows: {len(df)}")
     return df
 
-# ---------------- SEND WHATSAPP (META API) -----------------
-def send_whatsapp(to_phone, message_text):
+# ---------------- SEND WHATSAPP TEMPLATE -----------------
+def send_whatsapp_template(
+    to_phone,
+    customer,
+    course,
+    class_date,
+    class_time,
+    zoom_link
+):
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -63,9 +74,22 @@ def send_whatsapp(to_phone, message_text):
     payload = {
         "messaging_product": "whatsapp",
         "to": to_phone,
-        "type": "text",
-        "text": {
-            "body": message_text
+        "type": "template",
+        "template": {
+            "name": "class_reminder",
+            "language": {"code": "en_US"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": customer},
+                        {"type": "text", "text": course},
+                        {"type": "text", "text": class_date},
+                        {"type": "text", "text": class_time},
+                        {"type": "text", "text": zoom_link}
+                    ]
+                }
+            ]
         }
     }
 
@@ -76,10 +100,10 @@ def send_whatsapp(to_phone, message_text):
     )
 
     if response.status_code == 200:
-        log_message(f"✅ WhatsApp sent to {to_phone}")
+        log_message(f"✅ WhatsApp TEMPLATE sent to {to_phone}")
     else:
         log_message(
-            f"❌ WhatsApp failed to {to_phone}: {response.text}"
+            f"❌ Failed to send to {to_phone}: {response.text}"
         )
 
 # ---------------- PROCESS REMINDERS -----------------
@@ -90,38 +114,20 @@ def process_reminders():
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     log_message(f"Processing reminders for {today_str}")
+
     sent_count = 0
 
     for _, row in df.iterrows():
         if row["Reminder_Date"] != today_str:
             continue
 
-        message = f"""
-📢 *Class Reminder*
-
-Dear {row['Customer']},
-
-{row['Message']}
-
-📅 Date: {row['Reminder_Date']}
-📘 Course: {row['Course']}
-⏰ Time: {row['Session']}
-
-🔗 Zoom Link:
-{row['Zoom_link']}
-
-🆔 Meeting ID: {row['Meeting_id']}
-🔑 Passcode: {row['Passcode']}
-
-Warm regards,
-*New Dimension Academy*
-📞 +1 437 967 5082
-🌐 www.ndacademy.ca
-"""
-
-        send_whatsapp(
-            to_phone=row["Phone"],  # Must be E.164 format
-            message_text=message.strip()
+        send_whatsapp_template(
+            to_phone=row["Phone"],
+            customer=row["Customer"],
+            course=row["Course"],
+            class_date=row["Reminder_Date"],
+            class_time=row["Session"],
+            zoom_link=row["Zoom_link"]
         )
 
         sent_count += 1
