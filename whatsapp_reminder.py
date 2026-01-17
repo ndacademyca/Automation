@@ -76,7 +76,7 @@ def send_whatsapp_template(
         "to": to_phone,
         "type": "template",
         "template": {
-            "name": "class_reminder_2",
+            "name": "class_reminder_3",
             "language": {"code": "en_US"},
             "components": [
                 {
