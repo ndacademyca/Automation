@@ -2,7 +2,7 @@ name: Daily Class SMS Reminder
 
 on:
   schedule:
-    - cron: "0 19 * * *"   # 2:00 PM Toronto (EST / UTC-5)
+    - cron: "30 17 * * *"   # 1:30 PM Toronto (EST / UTC-5)
   workflow_dispatch:
 
 jobs:
