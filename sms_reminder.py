@@ -36,7 +36,30 @@ def log_message(message):
     print(f"[{timestamp}] {message}")
 
 # ---------------- READ GOOGLE SHEET -----------------
-def read_google_sheet():
+# def read_google_sheet():
+#     log_message("📌 read_google_sheet() called")
+
+#     creds = Credentials.from_service_account_info(
+#         SERVICE_ACCOUNT_INFO,
+#         scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
+#     )
+
+#     service = build("sheets", "v4", credentials=creds)
+#     result = service.spreadsheets().values().get(
+#         spreadsheetId=SPREADSHEET_ID,
+#         range=RANGE_NAME
+#     ).execute()
+
+#     values = result.get("values", [])
+#     if not values:
+#         log_message("❌ No data found in Google Sheet.")
+#         return None
+
+#     df = pd.DataFrame(values[1:], columns=values[0])
+#     log_message(f"✅ Sheet loaded. Rows: {len(df)}")
+#     return df
+
+def read_google_sheet(retries=3, timeout=60):
     log_message("📌 read_google_sheet() called")
 
     creds = Credentials.from_service_account_info(
@@ -44,20 +67,42 @@ def read_google_sheet():
         scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
     )
 
-    service = build("sheets", "v4", credentials=creds)
-    result = service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=RANGE_NAME
-    ).execute()
+    service = build(
+        "sheets",
+        "v4",
+        credentials=creds,
+        cache_discovery=False
+    )
 
-    values = result.get("values", [])
-    if not values:
-        log_message("❌ No data found in Google Sheet.")
-        return None
+    for attempt in range(1, retries + 1):
+        try:
+            result = service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range=RANGE_NAME
+            ).execute(num_retries=3)
 
-    df = pd.DataFrame(values[1:], columns=values[0])
-    log_message(f"✅ Sheet loaded. Rows: {len(df)}")
-    return df
+            values = result.get("values", [])
+            if not values:
+                log_message("❌ No data found in Google Sheet.")
+                return None
+
+            df = pd.DataFrame(values[1:], columns=values[0])
+            log_message(f"✅ Sheet loaded. Rows: {len(df)}")
+            return df
+
+        except HttpError as e:
+            log_message(f"⚠️ Google API error (attempt {attempt}): {e}")
+        except TimeoutError:
+            log_message(f"⏱ Timeout (attempt {attempt})")
+        except Exception as e:
+            log_message(f"❌ Unexpected error: {e}")
+
+        if attempt < retries:
+            time.sleep(5)
+
+    log_message("❌ Failed to read Google Sheet after retries")
+    return None
+
 
 # ---------------- SEND SMS -----------------
 def send_sms(
