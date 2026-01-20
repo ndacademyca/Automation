@@ -114,13 +114,15 @@ def send_sms(
     #zoom_link
 ):
     message_body = (
-        f"Hello {customer},\n\n"
-        f"Your class is today. Let’s learn and have fun!.\n\n"
+        f"Hello {customer},\n"
+        f"Your class is today.\n"
         f"Course: {course}\n"
         #f"Date: {class_date}\n"
         f"Time: {class_time}\n"
         #f"Zoom: {zoom_link}\n\n"
         #f"See you soon!"
+        f"Let’s learn and have fun😊\n"
+        f"New Dimension Academy"
     )
 
     try:
