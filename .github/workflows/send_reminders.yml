@@ -1,0 +1,32 @@
+name: Send Daily Reminders
+
+on:
+  schedule:
+    - cron: "30 13 * * *"  # every day at 14:00 UTC or 9 a.m ET  
+  workflow_dispatch:      # manual trigger
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+    - name: Run reminders script
+      env:
+        SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      run: |
+        python main.py
