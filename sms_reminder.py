@@ -10,7 +10,7 @@ from twilio.rest import Client
 
 # ---------------- GOOGLE SHEET CONFIG -----------------
 SPREADSHEET_ID = "1-gAUMbVOio3mTzfDstqjpnQdibP2oYjuF-vhX5UovCw"
-RANGE_NAME = "Time_Table_2"
+RANGE_NAME = "Time_Table"
 
 # ---------------- TWILIO SMS CONFIG -----------------
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -115,7 +115,7 @@ def send_sms(
 ):
     message_body = (
         f"Hello {customer},\n"
-        f"Your class is today.\n"
+        f"You have a class Today.\n"
         f"Course: {course}\n"
         #f"Date: {class_date}\n"
         f"Time: {class_time}\n"
