@@ -10,7 +10,7 @@ from twilio.rest import Client
 
 # ---------------- GOOGLE SHEET CONFIG -----------------
 SPREADSHEET_ID = "1-gAUMbVOio3mTzfDstqjpnQdibP2oYjuF-vhX5UovCw"
-RANGE_NAME = "Time_Table"
+RANGE_NAME = "Time_Table_2"
 
 # ---------------- TWILIO SMS CONFIG -----------------
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
