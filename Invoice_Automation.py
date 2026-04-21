@@ -59,8 +59,8 @@ def resolve_month_name(value: str) -> str:
 
 # ---------------- CLEAN NUMERIC STRING -----------------
 def clean_numeric(value) -> str:
-    """Strip commas, currency symbols, and whitespace so float() can parse it."""
-    return str(value or '').replace(',', '').replace('$', '').strip()
+    """Strip commas, currency symbols, percent signs, and whitespace so float() can parse it."""
+    return str(value or '').replace(',', '').replace('$', '').replace('%', '').strip()
 
 # ---------------- FORMAT CURRENCY -----------------
 def fmt_currency(value) -> str:
@@ -71,7 +71,7 @@ def fmt_currency(value) -> str:
 
 # ---------------- SAFE FLOAT SUM -----------------
 def safe_sum(rows, column) -> float:
-    """Sum a column across all rows, tolerating commas and empty cells."""
+    """Sum a column across all rows, tolerating commas, symbols, and empty cells."""
     total = 0.0
     for row in rows:
         raw = clean_numeric(row.get(column, ''))
@@ -156,26 +156,20 @@ def build_line_item_rows(rows):
     return html
 
 # ---------------- BUILD DISCOUNT ROWS -----------------
-def build_discount_rows(invoice_rows):
-    """Sum Total Discount across all rows; collect all unique discount labels."""
+def build_discount_rows(invoice_rows, subtotal: float, total_due: float):
+    """Derive discount amount as subtotal minus total due; collect all unique discount labels."""
     discount_labels = []
-    total_discount  = 0.0
 
     for row in invoice_rows:
-        # Collect unique discount type labels
         for i in range(1, 4):
             d = str(row.get(f"Discount Type {i}", "")).strip()
             if d and d not in discount_labels:
                 discount_labels.append(d)
-        # Sum discount amounts with comma-safe parsing
-        raw = clean_numeric(row.get('Total Discount', ''))
-        if raw:
-            try:
-                total_discount += float(raw)
-            except (ValueError, TypeError):
-                pass
 
-    if not discount_labels and total_discount == 0.0:
+    discount_amount = subtotal - total_due
+
+    # No labels and no meaningful discount → skip
+    if not discount_labels and discount_amount <= 0.0:
         return ""
 
     label_text = " / ".join(discount_labels) if discount_labels else "Discount"
@@ -186,7 +180,7 @@ def build_discount_rows(invoice_rows):
             Discount — {label_text}
         </td>
         <td style="padding:10px 12px;border:1px solid #e0e0e0;color:#c0392b;text-align:right">
-            − {fmt_currency(total_discount)}
+            − {fmt_currency(discount_amount)}
         </td>
     </tr>"""
 
@@ -202,15 +196,15 @@ def build_email(invoice_rows, month_name: str):
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
 
     # Subtotal = sum of Amount across all rows
-    subtotal = safe_sum(invoice_rows, 'Amount')
+    subtotal  = safe_sum(invoice_rows, 'Amount')
 
-    # Total Due = sum of "Amount after Discount" column across all rows
+    # Total Due = sum of Amount after Discount across all rows
     total_due = safe_sum(invoice_rows, 'Amount after Discount')
 
     subtotal_fmt          = fmt_currency(subtotal)
     amount_after_discount = fmt_currency(total_due)
 
-    # Show subtotal + discount rows only if any row carries a discount
+    # Show subtotal + discount rows only if any row carries a discount type label
     has_discount = any(
         str(row.get(f"Discount Type {i}", "")).strip()
         for row in invoice_rows
@@ -219,7 +213,8 @@ def build_email(invoice_rows, month_name: str):
 
     course_detail_rows = build_course_details_rows(invoice_rows)
     line_item_rows     = build_line_item_rows(invoice_rows)
-    discount_rows      = build_discount_rows(invoice_rows)
+    # Discount amount derived from subtotal - total_due (no dependency on Total Discount column)
+    discount_rows      = build_discount_rows(invoice_rows, subtotal, total_due)
 
     subtotal_row = f"""
         <tr style="background:#f9fafb">
