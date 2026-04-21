@@ -55,7 +55,7 @@ MONTH_NAMES = {
 def resolve_month_name(value: str) -> str:
     """Return a full month name whether the input is a number or already a name."""
     v = str(value).strip()
-    return MONTH_NAMES.get(v, v)   # falls back to the original value if already a word
+    return MONTH_NAMES.get(v, v)
 
 # ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
@@ -95,6 +95,7 @@ def fmt_currency(value):
 
 # ---------------- BUILD COURSE DETAILS ROWS -----------------
 def build_course_details_rows(rows):
+    """Build course detail table rows for all courses in the grouped invoice."""
     html = ""
     for i, row in enumerate(rows):
         bg          = "#f9fafb" if i % 2 == 0 else "#ffffff"
@@ -116,6 +117,7 @@ def build_course_details_rows(rows):
 
 # ---------------- BUILD INVOICE LINE ITEMS -----------------
 def build_line_item_rows(rows):
+    """Build one invoice breakdown row per course line."""
     html = ""
     for row in rows:
         course      = row.get('Course_', row.get('Course', ''))
@@ -136,26 +138,35 @@ def build_line_item_rows(rows):
     return html
 
 # ---------------- BUILD DISCOUNT ROWS -----------------
-def build_discount_rows(first_row):
-    html = ""
+def build_discount_rows(invoice_rows):
+    """Sum Total Discount across all rows; collect all unique discount labels."""
     discount_labels = []
-    for i in range(1, 4):
-        d = str(first_row.get(f"Discount Type {i}", "")).strip()
-        if d:
-            discount_labels.append(d)
+    total_discount  = 0.0
 
-    if discount_labels:
-        label_text = " / ".join(discount_labels)
-        html += f"""
-        <tr>
-            <td colspan="3" style="padding:10px 12px;border:1px solid #e0e0e0;color:#c0392b">
-                Discount — {label_text}
-            </td>
-            <td style="padding:10px 12px;border:1px solid #e0e0e0;color:#c0392b;text-align:right">
-                − {fmt_currency(first_row.get('Total Discount', ''))}
-            </td>
-        </tr>"""
-    return html
+    for row in invoice_rows:
+        for i in range(1, 4):
+            d = str(row.get(f"Discount Type {i}", "")).strip()
+            if d and d not in discount_labels:
+                discount_labels.append(d)
+        try:
+            total_discount += float(row.get('Total Discount', 0))
+        except (ValueError, TypeError):
+            pass
+
+    if not discount_labels and total_discount == 0.0:
+        return ""
+
+    label_text = " / ".join(discount_labels) if discount_labels else "Discount"
+
+    return f"""
+    <tr>
+        <td colspan="3" style="padding:10px 12px;border:1px solid #e0e0e0;color:#c0392b">
+            Discount — {label_text}
+        </td>
+        <td style="padding:10px 12px;border:1px solid #e0e0e0;color:#c0392b;text-align:right">
+            − {fmt_currency(total_discount)}
+        </td>
+    </tr>"""
 
 # ---------------- BUILD EMAIL -----------------
 def build_email(invoice_rows, month_name: str):
@@ -168,7 +179,7 @@ def build_email(invoice_rows, month_name: str):
     cust_email   = first.get('Customer Email', '')
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
 
-    # Subtotal = sum of all line Amount values
+    # Subtotal = sum of Amount across all rows
     subtotal = 0.0
     for row in invoice_rows:
         try:
@@ -176,25 +187,27 @@ def build_email(invoice_rows, month_name: str):
         except (ValueError, TypeError):
             pass
 
-    # Total Due = sum of Amount after Discount across ALL grouped rows
+    # Total Due = sum of "Amount after Discount" column across all rows
     total_due = 0.0
     for row in invoice_rows:
         try:
-            total_due += float(row.get('Amount after Discount', row.get('Amount', 0)))
+            total_due += float(row.get('Amount after Discount', 0))
         except (ValueError, TypeError):
             pass
 
     subtotal_fmt          = fmt_currency(subtotal)
     amount_after_discount = fmt_currency(total_due)
 
+    # Show subtotal row only if any row in the group carries a discount
     has_discount = any(
-        str(first.get(f"Discount Type {i}", "")).strip()
+        str(row.get(f"Discount Type {i}", "")).strip()
+        for row in invoice_rows
         for i in range(1, 4)
     )
 
     course_detail_rows = build_course_details_rows(invoice_rows)
     line_item_rows     = build_line_item_rows(invoice_rows)
-    discount_rows      = build_discount_rows(first)
+    discount_rows      = build_discount_rows(invoice_rows)
 
     subtotal_row = f"""
         <tr style="background:#f9fafb">
@@ -362,6 +375,7 @@ def process_invoices():
         log_message("ℹ️  No invoices scheduled for today.")
         return
 
+    # Handle typo in column name gracefully
     inv_col = "Invoice Numeber" if "Invoice Numeber" in df_today.columns else "Invoice Number"
 
     grouped = df_today.groupby(df_today[inv_col].str.strip())
@@ -382,7 +396,7 @@ def process_invoices():
         student    = first.get("Student", "")
         month_raw  = first.get("Service Month", "")
         year       = first.get("Service Year", "")
-        month_name = resolve_month_name(month_raw)   # "04" → "April"
+        month_name = resolve_month_name(month_raw)
 
         subject = (
             f"Invoice #{invoice_num} | "
