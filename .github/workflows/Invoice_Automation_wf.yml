@@ -33,6 +33,6 @@ jobs:
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          HEADER_IMAGE_URL: ${{ secrets.HEADER_IMAGE_URL2 }}
+          HEADER_IMAGE_URL2: ${{ secrets.HEADER_IMAGE_URL2 }}
           FOOTER_IMAGE_URL: ${{ secrets.FOOTER_IMAGE_URL }}
         run: python Invoice_Automation.py
