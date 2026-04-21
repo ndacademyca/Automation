@@ -14,7 +14,7 @@ from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 
 try:
-    from weasyprint import HTML as WeasyHTML
+    from weasyprint import HTML as WeasyHTML, CSS as WeasyCSS
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False
@@ -185,20 +185,14 @@ def build_discount_rows(invoice_rows, subtotal: float, total_due: float):
         </td>
     </tr>"""
 
-# ---------------- BUILD HTML BODY -----------------
-def build_html(invoice_rows, month_name: str) -> str:
-    """
-    Single source of truth for the invoice HTML.
-    Used for both the email body and the PDF attachment.
-    The only difference is that for PDF we swap remote image URLs
-    for base64-embedded versions so WeasyPrint can render them offline.
-    """
+# ---------------- BUILD INVOICE SECTIONS (shared) -----------------
+def build_invoice_sections(invoice_rows):
+    """Build all the inner table sections shared between email and PDF."""
     first = invoice_rows[0]
 
     invoice_num  = str(first.get('Invoice Numeber', first.get('Invoice Number', ''))).strip()
     invoice_date = first.get('Invoice Date', '')
     student      = first.get('Student', '')
-    year         = first.get('Service Year', '')
     cust_email   = first.get('Customer Email', '')
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
 
@@ -226,114 +220,390 @@ def build_html(invoice_rows, month_name: str) -> str:
             </td>
         </tr>""" if has_discount else ""
 
+    return dict(
+        invoice_num=invoice_num,
+        invoice_date=invoice_date,
+        student=student,
+        cust_email=cust_email,
+        cust_mobile=cust_mobile,
+        amount_after_discount=amount_after_discount,
+        course_detail_rows=course_detail_rows,
+        line_item_rows=line_item_rows,
+        subtotal_row=subtotal_row,
+        discount_rows=discount_rows,
+    )
+
+# ---------------- BUILD EMAIL HTML -----------------
+def build_email_html(invoice_rows, month_name: str) -> str:
+    """HTML optimised for email clients (table-based layout, remote images)."""
+    s = build_invoice_sections(invoice_rows)
+
     header_img_html = f'<tr><td><img src="{HEADER_IMAGE_URL2}" width="620" style="display:block;width:100%"></td></tr>' if HEADER_IMAGE_URL2 else ""
     footer_img_html = f'<tr><td><img src="{FOOTER_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if FOOTER_IMAGE_URL else ""
 
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="UTF-8"><title>Invoice #{invoice_num}</title></head>
-    <body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif">
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Invoice #{s['invoice_num']}</title></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr><td align="center" style="padding:30px 0">
+  <table width="620" style="background:#fff;border-radius:10px;overflow:hidden;border-collapse:collapse;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
 
-    <table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding:30px 0">
+    {header_img_html}
 
-        <table width="620" style="background:#fff;border-radius:10px;overflow:hidden;border-collapse:collapse;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
-
-            {header_img_html}
-
-            <!-- Billed To + Invoice Meta -->
-            <tr>
-                <td style="padding:24px 28px;background:#f0f4f8;color:#fff">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                            <td style="vertical-align:top">
-                                <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Billed To</p>
-                                <p style="margin:0;font-size:18px;font-weight:bold;color:#043C4C">{student}</p>
-                                <p style="margin:4px 0 0;font-size:13px;color:#043C4C;opacity:0.9">{cust_email}</p>
-                                <p style="margin:2px 0 0;font-size:13px;color:#7f8c8d;opacity:0.9">{cust_mobile}</p>
-                            </td>
-                            <td align="right" style="vertical-align:top">
-                                <h2 style="margin:0;font-size:22px;letter-spacing:1px;color:#043C4C">INVOICE</h2>
-                                <p style="margin:2px 0 0;font-size:20px;font-weight:bold;color:#f0c040">#{invoice_num}</p>
-                                <p style="margin:8px 0 0;font-size:12px;color:#aab8c4">Date: {invoice_date}</p>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Course Details -->
-            <tr>
-                <td style="padding:20px 28px">
-                    <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Course Details</p>
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-                        <tr style="background:#043C4C;color:#fff">
-                            <td style="padding:9px 10px">Course</td>
-                            <td style="padding:9px 10px">Type</td>
-                            <td style="padding:9px 10px">Level</td>
-                            <td style="padding:9px 10px">Teacher</td>
-                            <td style="padding:9px 10px;text-align:center">Classes</td>
-                        </tr>
-                        {course_detail_rows}
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Invoice Breakdown -->
-            <tr>
-                <td style="padding:0 28px 20px">
-                    <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Invoice Breakdown</p>
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-
-                        <tr style="background:#043C4C;color:#fff">
-                            <td style="padding:10px 12px;width:40%">Description</td>
-                            <td style="padding:10px 12px;text-align:center">Classes</td>
-                            <td style="padding:10px 12px;text-align:right">Rate</td>
-                            <td style="padding:10px 12px;text-align:right">Amount</td>
-                        </tr>
-
-                        {line_item_rows}
-                        {subtotal_row}
-                        {discount_rows}
-
-                        <tr style="background:#043C4C;color:#fff">
-                            <td colspan="3" style="padding:12px;font-weight:bold;font-size:15px">Total Due</td>
-                            <td style="padding:12px;text-align:right;font-weight:bold;font-size:16px;color:#f0c040">
-                                {amount_after_discount}
-                            </td>
-                        </tr>
-
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Footer Note -->
-            <tr>
-                <td style="padding:16px 28px;text-align:center;font-size:12px;color:#7f8c8d;border-top:1px solid #eee">
-                    Thank you for your continued trust in New Dimension Academy Inc.<br>
-                    Please settle the due amount via e-Transfer using info@ndacademy.ca
-                </td>
-            </tr>
-
-            {footer_img_html}
-
+    <!-- Billed To + Invoice Meta -->
+    <tr>
+      <td style="padding:24px 28px;background:#f0f4f8">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align:top;width:55%">
+              <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Billed To</p>
+              <p style="margin:0;font-size:18px;font-weight:bold;color:#043C4C">{s['student']}</p>
+              <p style="margin:4px 0 0;font-size:13px;color:#043C4C">{s['cust_email']}</p>
+              <p style="margin:2px 0 0;font-size:13px;color:#7f8c8d">{s['cust_mobile']}</p>
+            </td>
+            <!-- spacer -->
+            <td style="width:20px"></td>
+            <td align="right" style="vertical-align:top;width:45%">
+              <h2 style="margin:0;font-size:22px;letter-spacing:1px;color:#043C4C">INVOICE</h2>
+              <p style="margin:2px 0 0;font-size:20px;font-weight:bold;color:#f0c040">#{s['invoice_num']}</p>
+              <p style="margin:8px 0 0;font-size:12px;color:#aab8c4">Date: {s['invoice_date']}</p>
+            </td>
+          </tr>
         </table>
+      </td>
+    </tr>
 
-    </td></tr>
-    </table>
+    <!-- Course Details -->
+    <tr>
+      <td style="padding:20px 28px">
+        <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Course Details</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
+          <tr style="background:#043C4C;color:#fff">
+            <td style="padding:9px 10px">Course</td>
+            <td style="padding:9px 10px">Type</td>
+            <td style="padding:9px 10px">Level</td>
+            <td style="padding:9px 10px">Teacher</td>
+            <td style="padding:9px 10px;text-align:center">Classes</td>
+          </tr>
+          {s['course_detail_rows']}
+        </table>
+      </td>
+    </tr>
 
-    </body>
-    </html>
+    <!-- Invoice Breakdown -->
+    <tr>
+      <td style="padding:0 28px 20px">
+        <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Invoice Breakdown</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
+          <tr style="background:#043C4C;color:#fff">
+            <td style="padding:10px 12px;width:40%">Description</td>
+            <td style="padding:10px 12px;text-align:center">Classes</td>
+            <td style="padding:10px 12px;text-align:right">Rate</td>
+            <td style="padding:10px 12px;text-align:right">Amount</td>
+          </tr>
+          {s['line_item_rows']}
+          {s['subtotal_row']}
+          {s['discount_rows']}
+          <tr style="background:#043C4C;color:#fff">
+            <td colspan="3" style="padding:12px;font-weight:bold;font-size:15px">Total Due</td>
+            <td style="padding:12px;text-align:right;font-weight:bold;font-size:16px;color:#f0c040">
+              {s['amount_after_discount']}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Footer Note -->
+    <tr>
+      <td style="padding:16px 28px;text-align:center;font-size:12px;color:#7f8c8d;border-top:1px solid #eee">
+        Thank you for your continued trust in New Dimension Academy Inc.<br>
+        Please settle the due amount via e-Transfer using info@ndacademy.ca
+      </td>
+    </tr>
+
+    {footer_img_html}
+
+  </table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+# ---------------- BUILD PDF HTML -----------------
+def build_pdf_html(invoice_rows, month_name: str) -> str:
     """
+    HTML optimised for WeasyPrint PDF rendering.
+    - @page rule centres the content with equal margins on all sides.
+    - The header section uses explicit padding-right on the left cell
+      and padding-left on the right cell to guarantee visible space.
+    - Fixed 620px width matches the email layout exactly.
+    """
+    s = build_invoice_sections(invoice_rows)
+
+    header_img_html = f'<img src="{HEADER_IMAGE_URL2}" style="display:block;width:100%;max-width:620px">' if HEADER_IMAGE_URL2 else ""
+    footer_img_html = f'<img src="{FOOTER_IMAGE_URL}" style="display:block;width:100%;max-width:620px">' if FOOTER_IMAGE_URL else ""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Invoice #{s['invoice_num']}</title>
+<style>
+  /* ── Page setup: A4, centred with equal margins ── */
+  @page {{
+    size: A4;
+    margin: 25mm 20mm 25mm 20mm;
+  }}
+
+  * {{
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }}
+
+  body {{
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: #333;
+    background: #ffffff;
+    /* vertically centre the card on the page */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+  }}
+
+  /* ── Outer card ── */
+  .invoice-card {{
+    width: 620px;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }}
+
+  /* ── Header image ── */
+  .header-img {{ display:block; width:100%; }}
+
+  /* ── Billed-To / Invoice-Meta bar ── */
+  .meta-bar {{
+    background: #f0f4f8;
+    padding: 24px 28px;
+  }}
+  .meta-table {{
+    width: 100%;
+    border-collapse: collapse;
+  }}
+  /* LEFT cell — billed-to */
+  .meta-left {{
+    vertical-align: top;
+    width: 55%;
+    padding-right: 40px;   /* ← the gap between the two halves */
+  }}
+  /* RIGHT cell — invoice number */
+  .meta-right {{
+    vertical-align: top;
+    width: 45%;
+    text-align: right;
+    padding-left: 20px;    /* extra breathing room on the right */
+  }}
+  .label {{
+    margin: 0 0 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #7f8c8d;
+    letter-spacing: 1px;
+  }}
+  .student-name {{
+    margin: 0;
+    font-size: 17px;
+    font-weight: bold;
+    color: #043C4C;
+  }}
+  .meta-sub {{
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: #043C4C;
+  }}
+  .meta-mobile {{
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #7f8c8d;
+  }}
+  .invoice-title {{
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: #043C4C;
+  }}
+  .invoice-num {{
+    margin: 2px 0 0;
+    font-size: 19px;
+    font-weight: bold;
+    color: #f0c040;
+  }}
+  .invoice-date {{
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: #aab8c4;
+  }}
+
+  /* ── Section label ── */
+  .section-label {{
+    margin: 0 0 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #7f8c8d;
+    letter-spacing: 1px;
+  }}
+
+  /* ── Generic inner sections ── */
+  .section {{ padding: 20px 28px; }}
+  .section-bottom {{ padding: 0 28px 20px; }}
+
+  /* ── Data tables ── */
+  .data-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }}
+  .data-table th {{
+    background: #043C4C;
+    color: #fff;
+    padding: 9px 10px;
+    text-align: left;
+  }}
+  .data-table th.right {{ text-align: right; }}
+  .data-table th.center {{ text-align: center; }}
+  .data-table td {{
+    padding: 9px 10px;
+    border: 1px solid #e8ecef;
+  }}
+  .data-table td.right {{ text-align: right; }}
+  .data-table td.center {{ text-align: center; }}
+
+  /* ── Total row ── */
+  .total-row td {{
+    background: #043C4C;
+    color: #fff;
+    padding: 12px;
+    font-weight: bold;
+    font-size: 14px;
+    border: none;
+  }}
+  .total-amount {{
+    color: #f0c040 !important;
+    font-size: 15px !important;
+    text-align: right;
+  }}
+
+  /* ── Subtotal row ── */
+  .subtotal-row td {{
+    background: #f9fafb;
+    font-weight: bold;
+    border: 1px solid #e0e0e0;
+  }}
+
+  /* ── Discount row ── */
+  .discount-row td {{
+    color: #c0392b;
+    border: 1px solid #e0e0e0;
+  }}
+
+  /* ── Footer note ── */
+  .footer-note {{
+    padding: 16px 28px;
+    text-align: center;
+    font-size: 11px;
+    color: #7f8c8d;
+    border-top: 1px solid #eee;
+  }}
+</style>
+</head>
+<body>
+<div class="invoice-card">
+
+  {f'<div>{header_img_html}</div>' if header_img_html else ''}
+
+  <!-- Billed To + Invoice Meta -->
+  <div class="meta-bar">
+    <table class="meta-table">
+      <tr>
+        <td class="meta-left">
+          <p class="label">Billed To</p>
+          <p class="student-name">{s['student']}</p>
+          <p class="meta-sub">{s['cust_email']}</p>
+          <p class="meta-mobile">{s['cust_mobile']}</p>
+        </td>
+        <td class="meta-right">
+          <h2 class="invoice-title">INVOICE</h2>
+          <p class="invoice-num">#{s['invoice_num']}</p>
+          <p class="invoice-date">Date: {s['invoice_date']}</p>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Course Details -->
+  <div class="section">
+    <p class="section-label">Course Details</p>
+    <table class="data-table">
+      <tr>
+        <th>Course</th>
+        <th>Type</th>
+        <th>Level</th>
+        <th>Teacher</th>
+        <th class="center">Classes</th>
+      </tr>
+      {s['course_detail_rows']}
+    </table>
+  </div>
+
+  <!-- Invoice Breakdown -->
+  <div class="section-bottom">
+    <p class="section-label">Invoice Breakdown</p>
+    <table class="data-table">
+      <tr>
+        <th style="width:40%">Description</th>
+        <th class="center">Classes</th>
+        <th class="right">Rate</th>
+        <th class="right">Amount</th>
+      </tr>
+      {s['line_item_rows']}
+      {s['subtotal_row']}
+      {s['discount_rows']}
+      <tr class="total-row">
+        <td colspan="3">Total Due</td>
+        <td class="total-amount">{s['amount_after_discount']}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Footer Note -->
+  <div class="footer-note">
+    Thank you for your continued trust in New Dimension Academy Inc.<br>
+    Please settle the due amount via e-Transfer using info@ndacademy.ca
+  </div>
+
+  {f'<div>{footer_img_html}</div>' if footer_img_html else ''}
+
+</div>
+</body>
+</html>"""
 
 # ---------------- GENERATE PDF BYTES -----------------
-def generate_pdf(html: str, invoice_num: str) -> bytes | None:
-    """Convert the invoice HTML to PDF bytes using WeasyPrint."""
+def generate_pdf(invoice_rows, month_name: str, invoice_num: str) -> bytes | None:
     if not WEASYPRINT_AVAILABLE:
         log_message("⚠️  WeasyPrint not installed — skipping PDF attachment.")
         return None
     try:
+        html = build_pdf_html(invoice_rows, month_name)
         pdf_bytes = WeasyHTML(string=html).write_pdf()
         log_message(f"✅ PDF generated for invoice #{invoice_num} ({len(pdf_bytes):,} bytes)")
         return pdf_bytes
@@ -349,19 +619,13 @@ def send_email(to_email, subject, body, pdf_bytes: bytes | None = None, pdf_file
         msg["To"]      = to_email
         msg["Subject"] = subject
 
-        # HTML body
         msg.attach(MIMEText(body, "html"))
 
-        # PDF attachment (if generated)
         if pdf_bytes:
             part = MIMEBase("application", "pdf")
             part.set_payload(pdf_bytes)
             encoders.encode_base64(part)
-            part.add_header(
-                "Content-Disposition",
-                "attachment",
-                filename=pdf_filename
-            )
+            part.add_header("Content-Disposition", "attachment", filename=pdf_filename)
             msg.attach(part)
             log_message(f"📎 PDF attached: {pdf_filename}")
 
@@ -397,7 +661,6 @@ def process_invoices():
         return
 
     inv_col = "Invoice Numeber" if "Invoice Numeber" in df_today.columns else "Invoice Number"
-
     grouped = df_today.groupby(df_today[inv_col].str.strip())
 
     sent_count    = 0
@@ -423,18 +686,16 @@ def process_invoices():
             f"New Dimension Academy {month_name} {year} Courses for {student}"
         )
 
-        # Build HTML once — reuse for both email body and PDF
-        html_content = build_html(invoice_rows, month_name)
-
-        # Generate PDF attachment
+        # Email body and PDF are built from separate optimised templates
+        email_html = build_email_html(invoice_rows, month_name)
+        pdf_bytes  = generate_pdf(invoice_rows, month_name, invoice_num)
         pdf_filename = f"Invoice_{invoice_num}_{student.replace(' ', '_')}_{month_name}_{year}.pdf"
-        pdf_bytes    = generate_pdf(html_content, invoice_num)
 
         log_message(f"📨 Sending invoice #{invoice_num} → {customer_email} ({len(invoice_rows)} line(s))")
         send_email(
             to_email     = customer_email,
             subject      = subject,
-            body         = html_content,
+            body         = email_html,
             pdf_bytes    = pdf_bytes,
             pdf_filename = pdf_filename
         )
