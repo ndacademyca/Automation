@@ -57,6 +57,31 @@ def resolve_month_name(value: str) -> str:
     v = str(value).strip()
     return MONTH_NAMES.get(v, v)
 
+# ---------------- CLEAN NUMERIC STRING -----------------
+def clean_numeric(value) -> str:
+    """Strip commas, currency symbols, and whitespace so float() can parse it."""
+    return str(value or '').replace(',', '').replace('$', '').strip()
+
+# ---------------- FORMAT CURRENCY -----------------
+def fmt_currency(value) -> str:
+    try:
+        return f"{float(clean_numeric(value)):,.2f}"
+    except (ValueError, TypeError):
+        return "—"
+
+# ---------------- SAFE FLOAT SUM -----------------
+def safe_sum(rows, column) -> float:
+    """Sum a column across all rows, tolerating commas and empty cells."""
+    total = 0.0
+    for row in rows:
+        raw = clean_numeric(row.get(column, ''))
+        if raw:
+            try:
+                total += float(raw)
+            except (ValueError, TypeError):
+                pass
+    return total
+
 # ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
     log_message("📌 read_google_sheet() called")
@@ -85,13 +110,6 @@ def read_google_sheet():
     except Exception as e:
         log_message(f"❌ Failed to read Google Sheet: {e}")
         return None
-
-# ---------------- FORMAT CURRENCY -----------------
-def fmt_currency(value):
-    try:
-        return f"{float(value):,.2f}"
-    except (ValueError, TypeError):
-        return str(value) if value else "—"
 
 # ---------------- BUILD COURSE DETAILS ROWS -----------------
 def build_course_details_rows(rows):
@@ -144,14 +162,18 @@ def build_discount_rows(invoice_rows):
     total_discount  = 0.0
 
     for row in invoice_rows:
+        # Collect unique discount type labels
         for i in range(1, 4):
             d = str(row.get(f"Discount Type {i}", "")).strip()
             if d and d not in discount_labels:
                 discount_labels.append(d)
-        try:
-            total_discount += float(row.get('Total Discount', 0))
-        except (ValueError, TypeError):
-            pass
+        # Sum discount amounts with comma-safe parsing
+        raw = clean_numeric(row.get('Total Discount', ''))
+        if raw:
+            try:
+                total_discount += float(raw)
+            except (ValueError, TypeError):
+                pass
 
     if not discount_labels and total_discount == 0.0:
         return ""
@@ -180,25 +202,15 @@ def build_email(invoice_rows, month_name: str):
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
 
     # Subtotal = sum of Amount across all rows
-    subtotal = 0.0
-    for row in invoice_rows:
-        try:
-            subtotal += float(row.get('Amount', 0))
-        except (ValueError, TypeError):
-            pass
+    subtotal = safe_sum(invoice_rows, 'Amount')
 
     # Total Due = sum of "Amount after Discount" column across all rows
-    total_due = 0.0
-    for row in invoice_rows:
-        try:
-            total_due += float(row.get('Amount after Discount', 0))
-        except (ValueError, TypeError):
-            pass
+    total_due = safe_sum(invoice_rows, 'Amount after Discount')
 
     subtotal_fmt          = fmt_currency(subtotal)
     amount_after_discount = fmt_currency(total_due)
 
-    # Show subtotal row only if any row in the group carries a discount
+    # Show subtotal + discount rows only if any row carries a discount
     has_discount = any(
         str(row.get(f"Discount Type {i}", "")).strip()
         for row in invoice_rows
