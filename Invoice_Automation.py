@@ -242,18 +242,17 @@ def build_email(invoice_rows, month_name: str):
             {header_img_html}
 
             <tr>
-                <td style="padding:24px 28px;background:#043C4C;color:#fff">
+                <td style="padding:24px 28px;background:#f0f4f8;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
                             <td style="vertical-align:top">
-                                <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#aab8c4;letter-spacing:1px">Billed To</p>
-                                <p style="margin:0;font-size:18px;font-weight:bold;color:#ffffff">{student}</p>
-                                <p style="margin:4px 0 0;font-size:13px;color:#ffffff;opacity:0.9">{cust_email}</p>
-                                <p style="margin:2px 0 0;font-size:13px;color:#ffffff;opacity:0.9">{cust_mobile}</p>
+                                <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Billed To</p>
+                                <p style="margin:0;font-size:18px;font-weight:bold;color:#043C4C">{student}</p>
+                                <p style="margin:4px 0 0;font-size:13px;color:#043C4C;opacity:0.9">{cust_email}</p>
+                                <p style="margin:2px 0 0;font-size:13px;color:#7f8c8d;opacity:0.9">{cust_mobile}</p>
                             </td>
                             <td align="right" style="vertical-align:top">
-                                <h2 style="margin:0;font-size:22px;letter-spacing:1px">INVOICE</h2>
-                                <p style="margin:10px 0 0;font-size:11px;color:#aab8c4;text-transform:uppercase;letter-spacing:1px">No.</p>
+                                <h2 style="margin:0;font-size:22px;letter-spacing:1px;color:#043C4C">INVOICE</h2>
                                 <p style="margin:2px 0 0;font-size:20px;font-weight:bold;color:#f0c040">#{invoice_num}</p>
                                 <p style="margin:8px 0 0;font-size:12px;color:#aab8c4">Date: {invoice_date}</p>
                             </td>
