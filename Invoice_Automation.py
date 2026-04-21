@@ -224,7 +224,7 @@ def build_email(invoice_rows, month_name: str):
             </td>
         </tr>""" if has_discount else ""
 
-    _img_html = f'<tr><td><img src="{_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if _IMAGE_URL else ""
+    header_img_html = f'<tr><td><img src="{HEADER_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if HEADER_IMAGE_URL else ""
     footer_img_html = f'<tr><td><img src="{FOOTER_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if FOOTER_IMAGE_URL else ""
 
     return f"""
@@ -238,7 +238,7 @@ def build_email(invoice_rows, month_name: str):
 
         <table width="620" style="background:#fff;border-radius:10px;overflow:hidden;border-collapse:collapse;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
 
-            {_img_html}
+            {header_img_html}
 
             <!-- Invoice Title Bar -->
             <tr>
