@@ -20,6 +20,7 @@ SMTP_PORT = 465
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+# HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL2", "")
 HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL2", "")
 FOOTER_IMAGE_URL = os.getenv("FOOTER_IMAGE_URL", "")
 
@@ -116,8 +117,7 @@ def build_course_details_rows(rows):
     """Build course detail table rows for all courses in the grouped invoice."""
     html = ""
     for i, row in enumerate(rows):
-        # bg          = "#f9fafb" if i % 2 == 0 else "#ffffff" 
-        bg          = "#043C4C" if i % 2 == 0 else "#ffffff" 
+        bg          = "#f9fafb" if i % 2 == 0 else "#ffffff"
         course      = row.get('Course_', row.get('Course', ''))
         course_type = row.get('Course Type', '')
         level       = row.get('Level', '')
@@ -217,17 +217,10 @@ def build_email(invoice_rows, month_name: str):
     # Discount amount derived from subtotal - total_due (no dependency on Total Discount column)
     discount_rows      = build_discount_rows(invoice_rows, subtotal, total_due)
 
-    # subtotal_row = f"""
-    #     <tr style="background:#f9fafb">
-    #         <td colspan="3" style="padding:10px 12px;border:1px solid #e0e0e0;font-weight:bold">Subtotal</td>
-    #         <td style="padding:10px 12px;border:1px solid #e0e0e0;text-align:right;font-weight:bold">
-    #             {subtotal_fmt}
-    #         </td>
-    #     </tr>""" if has_discount else ""
     subtotal_row = f"""
-        <tr style="background:#043C4C">
-            <td colspan="3" style="padding:10px 12px;border:1px solid #ffffff;font-weight:bold">Subtotal</td>
-            <td style="padding:10px 12px;border:1px solid #ffffff;text-align:right;font-weight:bold">
+        <tr style="background:#f9fafb">
+            <td colspan="3" style="padding:10px 12px;border:1px solid #e0e0e0;font-weight:bold">Subtotal</td>
+            <td style="padding:10px 12px;border:1px solid #e0e0e0;text-align:right;font-weight:bold">
                 {subtotal_fmt}
             </td>
         </tr>""" if has_discount else ""
@@ -250,7 +243,7 @@ def build_email(invoice_rows, month_name: str):
 
             <!-- Invoice Title Bar -->
             <tr>
-                <td style="padding:24px 28px;background:#f0f4f8;color:#fff">
+                <td style="padding:24px 28px;background:#1a2e44;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
                             <!-- Left: Academy name & address -->
@@ -309,7 +302,7 @@ def build_email(invoice_rows, month_name: str):
                     <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Invoice Breakdown</p>
                     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
 
-                        <tr style="background:#043C4C;color:#fff">
+                        <tr style="background:#1a2e44;color:#fff">
                             <td style="padding:10px 12px;width:40%">Description</td>
                             <td style="padding:10px 12px;text-align:center">Classes</td>
                             <td style="padding:10px 12px;text-align:right">Rate</td>
@@ -320,7 +313,7 @@ def build_email(invoice_rows, month_name: str):
                         {subtotal_row}
                         {discount_rows}
 
-                        <tr style="background:#043C4C;color:#fff">
+                        <tr style="background:#1a2e44;color:#fff">
                             <td colspan="3" style="padding:12px;font-weight:bold;font-size:15px">Total Due</td>
                             <td style="padding:12px;text-align:right;font-weight:bold;font-size:16px;color:#f0c040">
                                 {amount_after_discount}
@@ -335,8 +328,7 @@ def build_email(invoice_rows, month_name: str):
             <tr>
                 <td style="padding:16px 28px;text-align:center;font-size:12px;color:#7f8c8d;border-top:1px solid #eee">
                     Thank you for your continued trust in New Dimension Academy.<br>
-                    Please settle the due amount via e-Transfer using this email<br>
-                    info@ndacademy.ca
+                    For any questions regarding this invoice, please reply to this email.
                 </td>
             </tr>
 
