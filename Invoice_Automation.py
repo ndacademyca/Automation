@@ -20,7 +20,7 @@ SMTP_PORT = 465
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-HEADER_IMAGE_URL = os.getenv("HEADER_IMAGE_URL2", "")
+HEADER_IMAGE_URL = os.getenv("HEADER_IMAGE_URL", "")
 FOOTER_IMAGE_URL = os.getenv("FOOTER_IMAGE_URL", "")
 
 # ---------------- SERVICE ACCOUNT -----------------
