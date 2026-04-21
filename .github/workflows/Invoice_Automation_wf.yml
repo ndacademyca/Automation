@@ -26,6 +26,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pandas google-api-python-client google-auth
+          
+      - name: Install system dependencies for WeasyPrint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libpangocairo-1.0-0 \
+            libcairo2 \
+            libgdk-pixbuf2.0-0 \
+            libffi-dev \
+            shared-mime-info
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas google-api-python-client google-auth weasyprint      
 
       # 4️⃣ Run the Invoice script
       - name: Run Invoice Automation
