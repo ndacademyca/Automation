@@ -117,7 +117,7 @@ def build_course_details_rows(rows):
     """Build course detail table rows for all courses in the grouped invoice."""
     html = ""
     for i, row in enumerate(rows):
-        bg          = "#f9fafb" if i % 2 == 0 else "#ffffff"
+        bg          = "#043C4C" if i % 2 == 0 else "#ffffff" #043C4C
         course      = row.get('Course_', row.get('Course', ''))
         course_type = row.get('Course Type', '')
         level       = row.get('Level', '')
@@ -218,7 +218,7 @@ def build_email(invoice_rows, month_name: str):
     discount_rows      = build_discount_rows(invoice_rows, subtotal, total_due)
 
     subtotal_row = f"""
-        <tr style="background:#f9fafb">
+        <tr style="background:#043C4C">
             <td colspan="3" style="padding:10px 12px;border:1px solid #e0e0e0;font-weight:bold">Subtotal</td>
             <td style="padding:10px 12px;border:1px solid #e0e0e0;text-align:right;font-weight:bold">
                 {subtotal_fmt}
@@ -232,7 +232,7 @@ def build_email(invoice_rows, month_name: str):
     <!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"><title>Invoice #{invoice_num}</title></head>
-    <body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif">
+    <body style="margin:0;padding:0;background:#fff;font-family:Arial,sans-serif">
 
     <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding:30px 0">
@@ -243,7 +243,7 @@ def build_email(invoice_rows, month_name: str):
 
             <!-- Invoice Title Bar -->
             <tr>
-                <td style="padding:24px 28px;background:#1a2e44;color:#fff">
+                <td style="padding:24px 28px;background:#fff;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
                             <!-- Left: Academy name & address -->
@@ -251,7 +251,6 @@ def build_email(invoice_rows, month_name: str):
                                 <h2 style="margin:0;font-size:22px;letter-spacing:1px">INVOICE</h2>
                                 <p style="margin:8px 0 0;font-size:13px;color:#ffffff;line-height:1.7">
                                     <strong>New Dimension Academy Inc.</strong><br>
-                                    Toronto, M9C 4W3 ON Canada
                                 </p>
                             </td>
                             <!-- Right: Invoice meta -->
