@@ -20,8 +20,8 @@ SMTP_PORT = 465
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-#HEADER_IMAGE_URL = os.getenv("HEADER_IMAGE_URL", "")
-HEADER_IMAGE_URL = os.getenv("HEADER_IMAGE_URL2", "")
+#HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL2", "")
+HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL22", "")
 FOOTER_IMAGE_URL = os.getenv("FOOTER_IMAGE_URL", "")
 
 # ---------------- SERVICE ACCOUNT -----------------
@@ -225,7 +225,7 @@ def build_email(invoice_rows, month_name: str):
             </td>
         </tr>""" if has_discount else ""
 
-    header_img_html = f'<tr><td><img src="{HEADER_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if HEADER_IMAGE_URL else ""
+    header_img_html = f'<tr><td><img src="{HEADER_IMAGE_URL2}" width="620" style="display:block;width:100%"></td></tr>' if HEADER_IMAGE_URL2 else ""
     footer_img_html = f'<tr><td><img src="{FOOTER_IMAGE_URL}" width="620" style="display:block;width:100%"></td></tr>' if FOOTER_IMAGE_URL else ""
 
     return f"""
