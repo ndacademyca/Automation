@@ -241,41 +241,24 @@ def build_email(invoice_rows, month_name: str):
 
             {header_img_html}
 
-            <!-- Invoice Title Bar -->
             <tr>
                 <td style="padding:24px 28px;background:#043C4C;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
-                            <!-- Left: Academy name & address -->
                             <td style="vertical-align:top">
-                                <h2 style="margin:0;font-size:22px;letter-spacing:1px">INVOICE</h2>
-                                <p style="margin:8px 0 0;font-size:13px;color:#ffffff;line-height:1.7">
-                                    <strong>New Dimension Academy Inc.</strong><br>
-                                    Toronto, M9C 4W3 ON Canada
-                                </p>
+                                <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#aab8c4;letter-spacing:1px">Billed To</p>
+                                <p style="margin:0;font-size:18px;font-weight:bold;color:#ffffff">{student}</p>
+                                <p style="margin:4px 0 0;font-size:13px;color:#ffffff;opacity:0.9">{cust_email}</p>
+                                <p style="margin:2px 0 0;font-size:13px;color:#ffffff;opacity:0.9">{cust_mobile}</p>
                             </td>
-                            <!-- Right: Invoice meta -->
                             <td align="right" style="vertical-align:top">
-                                <p style="margin:0;font-size:11px;color:#aab8c4;text-transform:uppercase;letter-spacing:1px">Invoice No.</p>
-                                <p style="margin:4px 0 0;font-size:20px;font-weight:bold;color:#f0c040">
-                                    #{invoice_num}
-                                </p>
-                                <p style="margin:8px 0 0;font-size:12px;color:#aab8c4">
-                                    Date: {invoice_date}
-                                </p>
+                                <h2 style="margin:0;font-size:22px;letter-spacing:1px">INVOICE</h2>
+                                <p style="margin:10px 0 0;font-size:11px;color:#aab8c4;text-transform:uppercase;letter-spacing:1px">No.</p>
+                                <p style="margin:2px 0 0;font-size:20px;font-weight:bold;color:#f0c040">#{invoice_num}</p>
+                                <p style="margin:8px 0 0;font-size:12px;color:#aab8c4">Date: {invoice_date}</p>
                             </td>
                         </tr>
                     </table>
-                </td>
-            </tr>
-
-            <!-- Billed To -->
-            <tr>
-                <td style="padding:20px 28px;background:#f0f4f8;border-bottom:2px solid #dce3ea">
-                    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Billed To</p>
-                    <p style="margin:0;font-size:16px;font-weight:bold;color:#1a2e44">{student}</p>
-                    <p style="margin:4px 0 0;font-size:13px;color:#555">{cust_email}</p>
-                    <p style="margin:2px 0 0;font-size:13px;color:#555">{cust_mobile}</p>
                 </td>
             </tr>
 
