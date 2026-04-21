@@ -36,6 +36,27 @@ def log_message(message: str):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"[{ts}] {message}")
 
+# ---------------- MONTH NUMBER TO NAME -----------------
+MONTH_NAMES = {
+    "01": "January",  "1": "January",
+    "02": "February", "2": "February",
+    "03": "March",    "3": "March",
+    "04": "April",    "4": "April",
+    "05": "May",      "5": "May",
+    "06": "June",     "6": "June",
+    "07": "July",     "7": "July",
+    "08": "August",   "8": "August",
+    "09": "September","9": "September",
+    "10": "October",
+    "11": "November",
+    "12": "December",
+}
+
+def resolve_month_name(value: str) -> str:
+    """Return a full month name whether the input is a number or already a name."""
+    v = str(value).strip()
+    return MONTH_NAMES.get(v, v)   # falls back to the original value if already a word
+
 # ---------------- READ GOOGLE SHEET -----------------
 def read_google_sheet():
     log_message("📌 read_google_sheet() called")
@@ -74,10 +95,9 @@ def fmt_currency(value):
 
 # ---------------- BUILD COURSE DETAILS ROWS -----------------
 def build_course_details_rows(rows):
-    """Build course detail table rows for all courses in the grouped invoice."""
     html = ""
     for i, row in enumerate(rows):
-        bg = "#f9fafb" if i % 2 == 0 else "#ffffff"
+        bg          = "#f9fafb" if i % 2 == 0 else "#ffffff"
         course      = row.get('Course_', row.get('Course', ''))
         course_type = row.get('Course Type', '')
         level       = row.get('Level', '')
@@ -96,7 +116,6 @@ def build_course_details_rows(rows):
 
 # ---------------- BUILD INVOICE LINE ITEMS -----------------
 def build_line_item_rows(rows):
-    """Build one invoice breakdown row per course line."""
     html = ""
     for row in rows:
         course      = row.get('Course_', row.get('Course', ''))
@@ -118,7 +137,6 @@ def build_line_item_rows(rows):
 
 # ---------------- BUILD DISCOUNT ROWS -----------------
 def build_discount_rows(first_row):
-    """Build discount rows from the first row of the group (discounts are invoice-level)."""
     html = ""
     discount_labels = []
     for i in range(1, 4):
@@ -140,19 +158,15 @@ def build_discount_rows(first_row):
     return html
 
 # ---------------- BUILD EMAIL -----------------
-def build_email(invoice_rows):
+def build_email(invoice_rows, month_name: str):
     first = invoice_rows[0]
 
     invoice_num  = str(first.get('Invoice Numeber', first.get('Invoice Number', ''))).strip()
     invoice_date = first.get('Invoice Date', '')
     student      = first.get('Student', '')
-    month        = first.get('Service Month', '')
     year         = first.get('Service Year', '')
     cust_email   = first.get('Customer Email', '')
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
-
-    # Totals are invoice-level — take from first row
-    amount_after_discount = fmt_currency(first.get('Amount after Discount', first.get('Amount', '')))
 
     # Subtotal = sum of all line Amount values
     subtotal = 0.0
@@ -161,7 +175,17 @@ def build_email(invoice_rows):
             subtotal += float(row.get('Amount', 0))
         except (ValueError, TypeError):
             pass
-    subtotal_fmt = fmt_currency(subtotal)
+
+    # Total Due = sum of Amount after Discount across ALL grouped rows
+    total_due = 0.0
+    for row in invoice_rows:
+        try:
+            total_due += float(row.get('Amount after Discount', row.get('Amount', 0)))
+        except (ValueError, TypeError):
+            pass
+
+    subtotal_fmt          = fmt_currency(subtotal)
+    amount_after_discount = fmt_currency(total_due)
 
     has_discount = any(
         str(first.get(f"Discount Type {i}", "")).strip()
@@ -201,15 +225,10 @@ def build_email(invoice_rows):
                 <td style="padding:24px 28px;background:#1a2e44;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
-                            <!-- Left: FROM -->
+                            <!-- Left: Academy name & address -->
                             <td style="vertical-align:top">
                                 <h2 style="margin:0;font-size:22px;letter-spacing:1px">INVOICE</h2>
-                                <p style="margin:6px 0 0;font-size:13px;color:#aab8c4">
-                                    {month} {year}
-                                </p>
-                                <!-- TO block -->
-                                <p style="margin:14px 0 2px;font-size:10px;text-transform:uppercase;color:#7f9ab5;letter-spacing:1px">To</p>
-                                <p style="margin:0;font-size:13px;color:#ffffff;line-height:1.7">
+                                <p style="margin:8px 0 0;font-size:13px;color:#ffffff;line-height:1.7">
                                     <strong>New Dimension Academy Inc.</strong><br>
                                     Toronto, M9C 4W3 ON Canada
                                 </p>
@@ -312,7 +331,7 @@ def send_email(to_email, subject, body):
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
-        bcc_list = ["alhuraibia@gmail.com", "dalmaznaee@gmail.com"]
+        bcc_list   = ["alhuraibia@gmail.com", "dalmaznaee@gmail.com"]
         recipients = [to_email] + bcc_list
         msg["Bcc"] = ", ".join(bcc_list)
 
@@ -334,7 +353,6 @@ def process_invoices():
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     log_message(f"📅 Processing invoices for today: {today_str}")
 
-    # Filter to today's invoices only
     def match_today(val):
         return str(val).strip().split(" ")[0] == today_str
 
@@ -344,10 +362,8 @@ def process_invoices():
         log_message("ℹ️  No invoices scheduled for today.")
         return
 
-    # Normalize invoice number column name (handles typo in sheet)
     inv_col = "Invoice Numeber" if "Invoice Numeber" in df_today.columns else "Invoice Number"
 
-    # Group by Invoice Number — one email per invoice
     grouped = df_today.groupby(df_today[inv_col].str.strip())
 
     sent_count    = 0
@@ -355,7 +371,7 @@ def process_invoices():
 
     for invoice_num, group in grouped:
         invoice_rows = group.to_dict(orient="records")
-        first = invoice_rows[0]
+        first        = invoice_rows[0]
 
         customer_email = str(first.get("Customer Email", "")).strip()
         if not customer_email:
@@ -363,14 +379,18 @@ def process_invoices():
             skipped_count += 1
             continue
 
-        student = first.get("Student", "")
-        month   = first.get("Service Month", "")
-        year    = first.get("Service Year", "")
+        student    = first.get("Student", "")
+        month_raw  = first.get("Service Month", "")
+        year       = first.get("Service Year", "")
+        month_name = resolve_month_name(month_raw)   # "04" → "April"
 
-        subject = f"Invoice #{invoice_num} | New Dimension Academy {month} {year} for {student}"
+        subject = (
+            f"Invoice #{invoice_num} | "
+            f"New Dimension Academy {month_name} {year} Courses for {student}"
+        )
 
         log_message(f"📨 Sending invoice #{invoice_num} → {customer_email} ({len(invoice_rows)} line(s))")
-        email_body = build_email(invoice_rows)
+        email_body = build_email(invoice_rows, month_name)
         send_email(
             to_email=customer_email,
             subject=subject,
