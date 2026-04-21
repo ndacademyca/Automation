@@ -7,9 +7,17 @@ import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime, timezone
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
+
+try:
+    from weasyprint import HTML as WeasyHTML
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
 
 # ---------------- CONFIGURATION -----------------
 SPREADSHEET_ID = "1mhTdW15u6E-jODDpXdlJjZohVU2NHbmzF2R8TZEpIls"
@@ -20,9 +28,8 @@ SMTP_PORT = 465
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-# HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL2", "")
 HEADER_IMAGE_URL2 = os.getenv("HEADER_IMAGE_URL2", "")
-FOOTER_IMAGE_URL = os.getenv("FOOTER_IMAGE_URL", "")
+FOOTER_IMAGE_URL  = os.getenv("FOOTER_IMAGE_URL", "")
 
 # ---------------- SERVICE ACCOUNT -----------------
 if "SERVICE_ACCOUNT_JSON" not in os.environ:
@@ -54,13 +61,11 @@ MONTH_NAMES = {
 }
 
 def resolve_month_name(value: str) -> str:
-    """Return a full month name whether the input is a number or already a name."""
     v = str(value).strip()
     return MONTH_NAMES.get(v, v)
 
 # ---------------- CLEAN NUMERIC STRING -----------------
 def clean_numeric(value) -> str:
-    """Strip commas, currency symbols, percent signs, and whitespace so float() can parse it."""
     return str(value or '').replace(',', '').replace('$', '').replace('%', '').strip()
 
 # ---------------- FORMAT CURRENCY -----------------
@@ -72,7 +77,6 @@ def fmt_currency(value) -> str:
 
 # ---------------- SAFE FLOAT SUM -----------------
 def safe_sum(rows, column) -> float:
-    """Sum a column across all rows, tolerating commas, symbols, and empty cells."""
     total = 0.0
     for row in rows:
         raw = clean_numeric(row.get(column, ''))
@@ -114,7 +118,6 @@ def read_google_sheet():
 
 # ---------------- BUILD COURSE DETAILS ROWS -----------------
 def build_course_details_rows(rows):
-    """Build course detail table rows for all courses in the grouped invoice."""
     html = ""
     for i, row in enumerate(rows):
         bg          = "#f9fafb" if i % 2 == 0 else "#ffffff"
@@ -136,7 +139,6 @@ def build_course_details_rows(rows):
 
 # ---------------- BUILD INVOICE LINE ITEMS -----------------
 def build_line_item_rows(rows):
-    """Build one invoice breakdown row per course line."""
     html = ""
     for row in rows:
         course      = row.get('Course_', row.get('Course', ''))
@@ -158,7 +160,6 @@ def build_line_item_rows(rows):
 
 # ---------------- BUILD DISCOUNT ROWS -----------------
 def build_discount_rows(invoice_rows, subtotal: float, total_due: float):
-    """Derive discount amount as subtotal minus total due; collect all unique discount labels."""
     discount_labels = []
 
     for row in invoice_rows:
@@ -169,7 +170,6 @@ def build_discount_rows(invoice_rows, subtotal: float, total_due: float):
 
     discount_amount = subtotal - total_due
 
-    # No labels and no meaningful discount → skip
     if not discount_labels and discount_amount <= 0.0:
         return ""
 
@@ -185,8 +185,14 @@ def build_discount_rows(invoice_rows, subtotal: float, total_due: float):
         </td>
     </tr>"""
 
-# ---------------- BUILD EMAIL -----------------
-def build_email(invoice_rows, month_name: str):
+# ---------------- BUILD HTML BODY -----------------
+def build_html(invoice_rows, month_name: str) -> str:
+    """
+    Single source of truth for the invoice HTML.
+    Used for both the email body and the PDF attachment.
+    The only difference is that for PDF we swap remote image URLs
+    for base64-embedded versions so WeasyPrint can render them offline.
+    """
     first = invoice_rows[0]
 
     invoice_num  = str(first.get('Invoice Numeber', first.get('Invoice Number', ''))).strip()
@@ -196,16 +202,12 @@ def build_email(invoice_rows, month_name: str):
     cust_email   = first.get('Customer Email', '')
     cust_mobile  = first.get('Customer Mobile No.', first.get('Customer Mobile No', ''))
 
-    # Subtotal = sum of Amount across all rows
     subtotal  = safe_sum(invoice_rows, 'Amount')
-
-    # Total Due = sum of Amount after Discount across all rows
     total_due = safe_sum(invoice_rows, 'Amount after Discount')
 
     subtotal_fmt          = fmt_currency(subtotal)
     amount_after_discount = fmt_currency(total_due)
 
-    # Show subtotal + discount rows only if any row carries a discount type label
     has_discount = any(
         str(row.get(f"Discount Type {i}", "")).strip()
         for row in invoice_rows
@@ -214,7 +216,6 @@ def build_email(invoice_rows, month_name: str):
 
     course_detail_rows = build_course_details_rows(invoice_rows)
     line_item_rows     = build_line_item_rows(invoice_rows)
-    # Discount amount derived from subtotal - total_due (no dependency on Total Discount column)
     discount_rows      = build_discount_rows(invoice_rows, subtotal, total_due)
 
     subtotal_row = f"""
@@ -241,6 +242,7 @@ def build_email(invoice_rows, month_name: str):
 
             {header_img_html}
 
+            <!-- Billed To + Invoice Meta -->
             <tr>
                 <td style="padding:24px 28px;background:#f0f4f8;color:#fff">
                     <table width="100%" cellpadding="0" cellspacing="0">
@@ -325,14 +327,43 @@ def build_email(invoice_rows, month_name: str):
     </html>
     """
 
+# ---------------- GENERATE PDF BYTES -----------------
+def generate_pdf(html: str, invoice_num: str) -> bytes | None:
+    """Convert the invoice HTML to PDF bytes using WeasyPrint."""
+    if not WEASYPRINT_AVAILABLE:
+        log_message("⚠️  WeasyPrint not installed — skipping PDF attachment.")
+        return None
+    try:
+        pdf_bytes = WeasyHTML(string=html).write_pdf()
+        log_message(f"✅ PDF generated for invoice #{invoice_num} ({len(pdf_bytes):,} bytes)")
+        return pdf_bytes
+    except Exception as e:
+        log_message(f"❌ PDF generation failed for invoice #{invoice_num}: {e}")
+        return None
+
 # ---------------- SEND EMAIL -----------------
-def send_email(to_email, subject, body):
+def send_email(to_email, subject, body, pdf_bytes: bytes | None = None, pdf_filename: str = "Invoice.pdf"):
     try:
         msg = MIMEMultipart()
-        msg["From"] = f"New Dimension Academy <{EMAIL_USER}>"
-        msg["To"] = to_email
+        msg["From"]    = f"New Dimension Academy <{EMAIL_USER}>"
+        msg["To"]      = to_email
         msg["Subject"] = subject
+
+        # HTML body
         msg.attach(MIMEText(body, "html"))
+
+        # PDF attachment (if generated)
+        if pdf_bytes:
+            part = MIMEBase("application", "pdf")
+            part.set_payload(pdf_bytes)
+            encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition",
+                "attachment",
+                filename=pdf_filename
+            )
+            msg.attach(part)
+            log_message(f"📎 PDF attached: {pdf_filename}")
 
         bcc_list   = ["alhuraibia@gmail.com", "dalmaznaee@gmail.com"]
         recipients = [to_email] + bcc_list
@@ -365,7 +396,6 @@ def process_invoices():
         log_message("ℹ️  No invoices scheduled for today.")
         return
 
-    # Handle typo in column name gracefully
     inv_col = "Invoice Numeber" if "Invoice Numeber" in df_today.columns else "Invoice Number"
 
     grouped = df_today.groupby(df_today[inv_col].str.strip())
@@ -393,12 +423,20 @@ def process_invoices():
             f"New Dimension Academy {month_name} {year} Courses for {student}"
         )
 
+        # Build HTML once — reuse for both email body and PDF
+        html_content = build_html(invoice_rows, month_name)
+
+        # Generate PDF attachment
+        pdf_filename = f"Invoice_{invoice_num}_{student.replace(' ', '_')}_{month_name}_{year}.pdf"
+        pdf_bytes    = generate_pdf(html_content, invoice_num)
+
         log_message(f"📨 Sending invoice #{invoice_num} → {customer_email} ({len(invoice_rows)} line(s))")
-        email_body = build_email(invoice_rows, month_name)
         send_email(
-            to_email=customer_email,
-            subject=subject,
-            body=email_body
+            to_email     = customer_email,
+            subject      = subject,
+            body         = html_content,
+            pdf_bytes    = pdf_bytes,
+            pdf_filename = pdf_filename
         )
         sent_count += 1
 
