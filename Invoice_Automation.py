@@ -309,7 +309,7 @@ def build_email(invoice_rows, month_name: str):
             <!-- Footer Note -->
             <tr>
                 <td style="padding:16px 28px;text-align:center;font-size:12px;color:#7f8c8d;border-top:1px solid #eee">
-                    Thank you for your continued trust in New Dimension Academy.<br>
+                    Thank you for your continued trust in New Dimension Academy Inc.<br>
                     Please settle the due amount via e-Transfer using info@ndacademy.ca
                 </td>
             </tr>
