@@ -224,7 +224,7 @@ def build_email(invoice_rows, month_name: str):
     #             {subtotal_fmt}
     #         </td>
     #     </tr>""" if has_discount else ""
-        subtotal_row = f"""
+    subtotal_row = f"""
         <tr style="background:#043C4C">
             <td colspan="3" style="padding:10px 12px;border:1px solid #ffffff;font-weight:bold">Subtotal</td>
             <td style="padding:10px 12px;border:1px solid #ffffff;text-align:right;font-weight:bold">
