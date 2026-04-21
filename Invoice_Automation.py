@@ -284,7 +284,7 @@ def build_email(invoice_rows, month_name: str):
                 <td style="padding:20px 28px">
                     <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Course Details</p>
                     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
-                        <tr style="background:#1a2e44;color:#fff">
+                        <tr style="background:#043C4C;color:#fff">
                             <td style="padding:9px 10px">Course</td>
                             <td style="padding:9px 10px">Type</td>
                             <td style="padding:9px 10px">Level</td>
@@ -302,7 +302,7 @@ def build_email(invoice_rows, month_name: str):
                     <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;color:#7f8c8d;letter-spacing:1px">Invoice Breakdown</p>
                     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
 
-                        <tr style="background:#1a2e44;color:#fff">
+                        <tr style="background:#043C4C;color:#fff">
                             <td style="padding:10px 12px;width:40%">Description</td>
                             <td style="padding:10px 12px;text-align:center">Classes</td>
                             <td style="padding:10px 12px;text-align:right">Rate</td>
@@ -313,7 +313,7 @@ def build_email(invoice_rows, month_name: str):
                         {subtotal_row}
                         {discount_rows}
 
-                        <tr style="background:#1a2e44;color:#fff">
+                        <tr style="background:#043C4C;color:#fff">
                             <td colspan="3" style="padding:12px;font-weight:bold;font-size:15px">Total Due</td>
                             <td style="padding:12px;text-align:right;font-weight:bold;font-size:16px;color:#f0c040">
                                 {amount_after_discount}
