@@ -2,9 +2,9 @@
 name: WhatsApp Class Reminder (Meta API)
 
 on:
-  schedule:
+  # schedule:
     # Runs every day at 8:00 AM Toronto time (13:00 UTC)
-    - cron: "0 13 * * *"
+    # - cron: "0 13 * * *"
 
   workflow_dispatch:  # Manual trigger
 
